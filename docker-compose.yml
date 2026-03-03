@@ -1,0 +1,48 @@
+services:
+  # ---- PostgreSQL Database ----
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ashish123
+      POSTGRES_DB: skillnexus
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ---- FastAPI Backend ----
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:ashish123@db:5432/skillnexus
+      SECRET_KEY: ${SECRET_KEY:-skillnexus-dev-secret-key-2026}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      DEBUG: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ---- React Frontend (nginx) ----
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: /api
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
