@@ -38,34 +38,6 @@ TECH_SKILLS = {
     "apache spark", "hadoop", "airflow", "kafka",
 }
 
-# Mapping of skills to suggested roadmap categories
-SKILL_TO_ROADMAP = {
-    "react": "Advanced React Developer",
-    "reactjs": "Advanced React Developer",
-    "angular": "Angular Developer",
-    "vue": "Vue.js Developer",
-    "javascript": "Full Stack JavaScript Developer",
-    "typescript": "TypeScript Developer",
-    "python": "Python Developer",
-    "fastapi": "Python Backend Developer",
-    "django": "Python Backend Developer",
-    "java": "Java Developer",
-    "spring": "Java Spring Developer",
-    "go": "Go Developer",
-    "golang": "Go Developer",
-    "docker": "DevOps Engineer",
-    "kubernetes": "DevOps Engineer",
-    "aws": "Cloud Solutions Architect",
-    "azure": "Cloud Solutions Architect",
-    "machine learning": "ML Engineer",
-    "deep learning": "ML Engineer",
-    "data science": "Data Scientist",
-    "sql": "Database Developer",
-    "postgresql": "Database Developer",
-    "node.js": "Node.js Backend Developer",
-    "nodejs": "Node.js Backend Developer",
-}
-
 
 def extract_text_from_pdf(file_content: bytes) -> str:
     """Extract text content from a PDF file."""
@@ -90,23 +62,8 @@ def extract_skills(text: str) -> List[str]:
     return sorted(list(found_skills))
 
 
-def suggest_roadmaps(skills: List[str]) -> List[str]:
-    """Suggest roadmaps based on extracted skills."""
-    suggestions = set()
-    for skill in skills:
-        skill_lower = skill.lower()
-        if skill_lower in SKILL_TO_ROADMAP:
-            suggestions.add(SKILL_TO_ROADMAP[skill_lower])
-
-    if not suggestions:
-        suggestions.add("Full Stack Developer (General)")
-
-    return sorted(list(suggestions))
-
-
-def parse_resume(file_content: bytes) -> Tuple[List[str], List[str]]:
-    """Parse a resume PDF and return (skills, suggested_roadmaps)."""
+def parse_resume(file_content: bytes) -> List[str]:
+    """Parse a resume PDF and return an array of skills."""
     text = extract_text_from_pdf(file_content)
     skills = extract_skills(text)
-    roadmaps = suggest_roadmaps(skills)
-    return skills, roadmaps
+    return skills

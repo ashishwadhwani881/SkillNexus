@@ -2,10 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User, UserSkill, PointTransaction
-from app.models.roadmap import UserRoadmap
+from app.models.roadmap import UserRoadmap, Roadmap
 from app.schemas.user import UserResponse, UserProfileUpdate, UserDetailResponse, UserSkillResponse, ResumeUploadResponse
 from app.utils.dependencies import get_current_user
 from app.services.resume_parser import parse_resume
+from app.services.ai_tutor import recommend_roadmaps
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
 
@@ -19,15 +20,17 @@ def get_profile(
     assigned_count = db.query(UserRoadmap).filter(UserRoadmap.user_id == current_user.id).count()
     skills = db.query(UserSkill).filter(UserSkill.user_id == current_user.id).all()
 
+    is_learner = current_user.role.value == "learner"
+
     return UserDetailResponse(
         id=current_user.id,
         email=current_user.email,
         full_name=current_user.full_name,
         role=current_user.role.value,
-        xp=current_user.xp,
-        level=current_user.level,
+        xp=current_user.xp if is_learner else None,
+        level=current_user.level if is_learner else None,
         current_job_role=current_user.current_job_role,
-        streak_days=current_user.streak_days,
+        streak_days=current_user.streak_days if is_learner else None,
         last_login=current_user.last_login,
         created_at=current_user.created_at,
         skills=[UserSkillResponse.model_validate(s) for s in skills],
@@ -59,6 +62,12 @@ async def upload_resume(
     db: Session = Depends(get_db),
 ):
     """Upload resume PDF, extract skills, and suggest roadmaps."""
+    if current_user.role.value != "learner":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Resume upload is allowed only for learners."
+        )
+
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are accepted")
 
@@ -66,7 +75,7 @@ async def upload_resume(
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File too large (max 5MB)")
 
-    skills, suggested_roadmaps = parse_resume(content)
+    skills = parse_resume(content)
 
     for skill_name in skills:
         existing = db.query(UserSkill).filter(
@@ -83,6 +92,16 @@ async def upload_resume(
 
     db.commit()
 
+    # Query published roadmaps to pass to AI
+    published_roadmaps = db.query(Roadmap).filter(Roadmap.is_published == True).all()
+    available_roadmaps_data = [
+        {"id": rm.id, "title": rm.title, "description": rm.description}
+        for rm in published_roadmaps
+    ]
+
+    # Generate AI recommendations from DB roadmaps only
+    suggested_roadmaps = await recommend_roadmaps(skills, available_roadmaps_data)
+
     return ResumeUploadResponse(
         skills_found=skills,
         suggested_roadmaps=suggested_roadmaps,
@@ -96,6 +115,9 @@ def get_point_history(
     db: Session = Depends(get_db),
 ):
     """Get current user's XP point transaction history."""
+    if current_user.role.value != "learner":
+        raise HTTPException(status_code=403, detail="Gamification metrics are only available for learners")
+
     transactions = (
         db.query(PointTransaction)
         .filter(PointTransaction.user_id == current_user.id)

@@ -208,6 +208,7 @@ async def verify_quiz(
         NodeProgress.user_id == current_user.id,
         NodeProgress.node_id == submission.node_id,
     ).first()
+    
     if progress and progress.quiz_passed:
         del _quiz_cache[submission.session_id]
         raise HTTPException(status_code=400, detail="Quiz already passed. No multiple submissions allowed.")

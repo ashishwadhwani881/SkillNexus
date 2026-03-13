@@ -17,8 +17,10 @@ export default function Profile() {
         if (user) {
             setForm({ full_name: user.full_name || '', current_job_role: user.current_job_role || '' });
             setSkills(user.skills || []);
+            if (user.role === 'learner') {
+                userAPI.getPoints().then((res) => setPoints(res.data.transactions || [])).catch(() => { });
+            }
         }
-        userAPI.getPoints().then((res) => setPoints(res.data.transactions || [])).catch(() => { });
     }, [user]);
 
     const handleSave = async () => {
@@ -49,7 +51,7 @@ export default function Profile() {
         <div>
             <div className="page-header">
                 <h2>My Profile</h2>
-                <p>Your learning stats and settings</p>
+                <p>{user?.role === 'learner' ? 'Your learning stats and settings' : 'Your profile and settings'}</p>
             </div>
 
             {/* Profile Card */}
@@ -88,71 +90,77 @@ export default function Profile() {
             </div>
 
             {/* Stats */}
-            <div className="stats-grid">
-                <div className="stat-card">
-                    <div className="stat-icon" style={{ background: 'rgba(99,102,241,0.15)', color: 'var(--accent-primary)' }}><HiOutlineBolt /></div>
-                    <div className="stat-info"><h3>{user?.xp || 0}</h3><p>Total XP</p></div>
+            {user?.role === 'learner' && (
+                <div className="stats-grid">
+                    <div className="stat-card">
+                        <div className="stat-icon" style={{ background: 'rgba(99,102,241,0.15)', color: 'var(--accent-primary)' }}><HiOutlineBolt /></div>
+                        <div className="stat-info"><h3>{user?.xp || 0}</h3><p>Total XP</p></div>
+                    </div>
+                    <div className="stat-card">
+                        <div className="stat-icon" style={{ background: 'rgba(16,185,129,0.15)', color: 'var(--success)' }}><HiOutlineAcademicCap /></div>
+                        <div className="stat-info"><h3>Level {user?.level || 1}</h3><p>Current Level</p></div>
+                    </div>
+                    <div className="stat-card">
+                        <div className="stat-icon" style={{ background: 'rgba(245,158,11,0.15)', color: 'var(--warning)' }}><HiOutlineFire /></div>
+                        <div className="stat-info"><h3>{user?.streak_days || 0} days</h3><p>Streak</p></div>
+                    </div>
                 </div>
-                <div className="stat-card">
-                    <div className="stat-icon" style={{ background: 'rgba(16,185,129,0.15)', color: 'var(--success)' }}><HiOutlineAcademicCap /></div>
-                    <div className="stat-info"><h3>Level {user?.level || 1}</h3><p>Current Level</p></div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-icon" style={{ background: 'rgba(245,158,11,0.15)', color: 'var(--warning)' }}><HiOutlineFire /></div>
-                    <div className="stat-info"><h3>{user?.streak_days || 0} days</h3><p>Streak</p></div>
-                </div>
-            </div>
+            )}
 
             {/* Skills */}
-            <div className="card" style={{ marginBottom: 24 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                    <h3 style={{ fontSize: 16, fontWeight: 700 }}>Skills</h3>
-                    <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
-                        <HiOutlineArrowUpTray /> {uploading ? 'Uploading...' : 'Upload Resume'}
-                        <input type="file" accept=".pdf" onChange={handleResume} hidden disabled={uploading} />
-                    </label>
+            {user?.role === 'learner' && (
+                <div className="card" style={{ marginBottom: 24 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <h3 style={{ fontSize: 16, fontWeight: 700 }}>Skills</h3>
+                        <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
+                            <HiOutlineArrowUpTray /> {uploading ? 'Uploading...' : 'Upload Resume'}
+                            <input type="file" accept=".pdf" onChange={handleResume} hidden disabled={uploading} />
+                        </label>
+                    </div>
+                    {resumeResult && (
+                        <div className="toast toast-success" style={{ marginBottom: 12 }}>
+                            {resumeResult.message}
+                        </div>
+                    )}
+                    {skills.length > 0 ? (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                            {skills.map((s, i) => (
+                                <span key={i} className="badge badge-info">{s.skill_name}</span>
+                            ))}
+                        </div>
+                    ) : (
+                        <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No skills detected yet. Upload your resume to extract skills.</p>
+                    )}
                 </div>
-                {resumeResult && (
-                    <div className="toast toast-success" style={{ marginBottom: 12 }}>
-                        {resumeResult.message}
-                    </div>
-                )}
-                {skills.length > 0 ? (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                        {skills.map((s, i) => (
-                            <span key={i} className="badge badge-info">{s.skill_name}</span>
-                        ))}
-                    </div>
-                ) : (
-                    <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No skills detected yet. Upload your resume to extract skills.</p>
-                )}
-            </div>
+            )}
 
             {/* XP History */}
-            <div className="card">
-                <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}><HiOutlineDocumentText style={{ verticalAlign: 'middle', marginRight: 6 }} />XP History</h3>
-                {points.length === 0 ? (
-                    <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No XP transactions yet</p>
-                ) : (
-                    <div className="table-container">
-                        <table>
-                            <thead>
-                                <tr><th>Action</th><th>Description</th><th style={{ textAlign: 'right' }}>XP</th><th>Date</th></tr>
-                            </thead>
-                            <tbody>
-                                {points.slice(0, 20).map((t) => (
-                                    <tr key={t.id}>
-                                        <td><span className="badge badge-neutral">{t.action}</span></td>
-                                        <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{t.description}</td>
-                                        <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--success)' }}>+{t.points}</td>
-                                        <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{new Date(t.created_at).toLocaleDateString()}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </div>
+            {user?.role === 'learner' && (
+                <div className="card">
+                    <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}><HiOutlineDocumentText style={{ verticalAlign: 'middle', marginRight: 6 }} />XP History</h3>
+                    {points.length === 0 ? (
+                        <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No XP transactions yet</p>
+                    ) : (
+                        <div className="table-container">
+                            <table>
+                                <thead>
+                                    <tr><th>Action</th><th>Description</th><th style={{ textAlign: 'right' }}>XP</th><th>Date</th></tr>
+                                </thead>
+                                <tbody>
+                                    {points.slice(0, 20).map((t) => (
+                                        <tr key={t.id}>
+                                            <td><span className="badge badge-neutral">{t.action}</span></td>
+                                            <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{t.description}</td>
+                                            <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--success)' }}>+{t.points}</td>
+                                            <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{new Date(t.created_at).toLocaleDateString()}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

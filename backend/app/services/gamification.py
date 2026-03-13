@@ -13,7 +13,6 @@ XP_REWARDS = {
     "node_in_progress": 10,
 }
 
-
 def calculate_level(xp: int) -> int:
     """Level = floor(XP / 200) + 1"""
     return max(1, math.floor(xp / 200) + 1)
@@ -30,7 +29,7 @@ def award_points(
     points = custom_points if custom_points is not None else XP_REWARDS.get(action, 0)
     if points == 0:
         return None
-
+    
     transaction = PointTransaction(
         user_id=user.id,
         action=action,

@@ -56,7 +56,7 @@ export default function AdminAnalytics() {
                         <div className="table-container" style={{ marginBottom: 28 }}>
                             <table>
                                 <thead>
-                                    <tr><th>Employee</th><th>Email</th><th>Progress</th><th>Assigned</th><th>Last Active</th></tr>
+                                    <tr><th>Employee</th><th>Email</th><th>Progress</th><th>Nodes</th><th>Assigned</th><th>Last Active</th></tr>
                                 </thead>
                                 <tbody>
                                     {analytics.map((a, i) => (
@@ -71,6 +71,7 @@ export default function AdminAnalytics() {
                                                     <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-primary)', minWidth: 40, textAlign: 'right' }}>{a.progress_pct}%</span>
                                                 </div>
                                             </td>
+                                            <td style={{ fontSize: 13 }}><span className="badge badge-success">{a.completed_nodes || 0}</span> / {a.total_nodes || '?'}</td>
                                             <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{a.assigned_at ? new Date(a.assigned_at).toLocaleDateString() : '-'}</td>
                                             <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{a.last_active ? new Date(a.last_active).toLocaleDateString() : 'Never'}</td>
                                         </tr>

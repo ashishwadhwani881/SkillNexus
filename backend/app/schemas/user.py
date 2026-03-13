@@ -37,10 +37,10 @@ class UserResponse(BaseModel):
     email: str
     full_name: str
     role: str
-    xp: int
-    level: int
+    xp: Optional[int] = None
+    level: Optional[int] = None
     current_job_role: Optional[str] = None
-    streak_days: int
+    streak_days: Optional[int] = None
     last_login: Optional[datetime] = None
     created_at: Optional[datetime] = None
 

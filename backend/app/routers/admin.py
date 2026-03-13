@@ -1,10 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, desc
 from typing import Optional, List
 from app.database import get_db
-from app.models.user import User
+from app.models.user import User, PointTransaction
 from app.schemas.user import UserCreateAdmin, UserResponse
 from app.utils.security import get_password_hash
 from app.models.roadmap import Roadmap, RoadmapNode, UserRoadmap
@@ -68,9 +68,21 @@ def assign_roadmap(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    if user.role != "learner":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Roadmaps can only be assigned to learners."
+        )
+
     roadmap = db.query(Roadmap).filter(Roadmap.id == roadmap_id).first()
     if not roadmap:
         raise HTTPException(status_code=404, detail="Roadmap not found")
+
+    if not roadmap.is_published:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Draft roadmaps cannot be assigned to users.",
+        )
 
     existing = db.query(UserRoadmap).filter(
         UserRoadmap.user_id == user_id,
@@ -119,6 +131,12 @@ def bulk_assign_roadmap(
     if not roadmap:
         raise HTTPException(status_code=404, detail="Roadmap not found")
 
+    if not roadmap.is_published:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Draft roadmaps cannot be assigned to users.",
+        )
+
     nodes = db.query(RoadmapNode).filter(RoadmapNode.roadmap_id == roadmap_id).all()
     assigned = []
     skipped = []
@@ -127,6 +145,10 @@ def bulk_assign_roadmap(
         user = db.query(User).filter(User.id == uid).first()
         if not user:
             skipped.append({"user_id": uid, "reason": "User not found"})
+            continue
+            
+        if user.role != "learner":
+            skipped.append({"user_id": uid, "reason": "Not a learner"})
             continue
 
         existing = db.query(UserRoadmap).filter(
@@ -167,13 +189,80 @@ def bulk_assign_roadmap(
 
 # ----- Analytics -----
 
+@router.get("/dashboard")
+def get_dashboard_stats(
+    current_user: User = Depends(get_current_admin_or_manager),
+    db: Session = Depends(get_db),
+):
+    """Get high-level dashboard metrics for admin/manager."""
+    total_learners = db.query(User).filter(User.role == "learner").count()
+    
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    active_learners = db.query(User).filter(
+        User.role == "learner",
+        User.last_login >= thirty_days_ago
+    ).count()
+
+    roadmaps_assigned = db.query(UserRoadmap).join(User).filter(User.role == "learner").count()
+    completed_roadmaps = db.query(UserRoadmap).join(User).filter(
+        UserRoadmap.progress_pct == 100,
+        User.role == "learner"
+    ).count()
+
+    seven_days_ago = datetime.utcnow() - timedelta(days=7)
+    subquery = (
+        db.query(
+            PointTransaction.user_id,
+            func.sum(PointTransaction.points).label("period_xp"),
+        )
+        .filter(PointTransaction.created_at >= seven_days_ago)
+        .group_by(PointTransaction.user_id)
+        .subquery()
+    )
+
+    top_rows = (
+        db.query(
+            User.id,
+            User.full_name,
+            User.xp,
+            User.level,
+            User.role,
+            subquery.c.period_xp,
+        )
+        .join(subquery, User.id == subquery.c.user_id)
+        .filter(User.role == "learner")
+        .order_by(desc(subquery.c.period_xp))
+        .limit(5)
+        .all()
+    )
+
+    top_learners_this_week = [
+        {
+            "user_id": row[0],
+            "full_name": row[1],
+            "xp": row[5] or 0,
+            "level": row[3],
+            "role": row[4].value if hasattr(row[4], 'value') else row[4],
+        }
+        for row in top_rows
+    ]
+
+    return {
+        "total_learners": total_learners,
+        "active_learners": active_learners,
+        "roadmaps_assigned": roadmaps_assigned,
+        "completed_roadmaps": completed_roadmaps,
+        "top_learners_this_week": top_learners_this_week,
+    }
+
+
 @router.get("/analytics")
 def get_analytics(
     roadmap_id: Optional[int] = None,
     current_user: User = Depends(get_current_admin_or_manager),
     db: Session = Depends(get_db),
 ):
-    """Get analytics dashboard data: user progress across roadmaps."""
+    """Get analytics dashboard data: user progress across roadmaps (live-calculated)."""
     query = db.query(UserRoadmap)
     if roadmap_id:
         query = query.filter(UserRoadmap.roadmap_id == roadmap_id)
@@ -182,20 +271,43 @@ def get_analytics(
     analytics_data = []
     for assignment in assignments:
         user = db.query(User).filter(User.id == assignment.user_id).first()
+        if not user or user.role != "learner":
+            continue
+            
         roadmap = db.query(Roadmap).filter(Roadmap.id == assignment.roadmap_id).first()
 
-        if user and roadmap:
+        if roadmap:
+            # Live-calculate progress from NodeProgress records
+            all_nodes = db.query(RoadmapNode).filter(RoadmapNode.roadmap_id == roadmap.id).all()
+            total_nodes = len(all_nodes)
+            node_ids = [n.id for n in all_nodes]
+
+            done_count = db.query(NodeProgress).filter(
+                NodeProgress.user_id == user.id,
+                NodeProgress.node_id.in_(node_ids),
+                NodeProgress.status == NodeStatus.DONE,
+            ).count() if node_ids else 0
+
+            live_progress = round((done_count / total_nodes * 100), 2) if total_nodes > 0 else 0.0
+
+            # Also sync the cached value so it's always up to date
+            if assignment.progress_pct != live_progress:
+                assignment.progress_pct = live_progress
+
             analytics_data.append({
                 "user_id": user.id,
                 "employee_name": user.full_name,
                 "email": user.email,
                 "assigned_roadmap": roadmap.title,
                 "roadmap_id": roadmap.id,
-                "progress_pct": assignment.progress_pct,
+                "progress_pct": live_progress,
+                "completed_nodes": done_count,
+                "total_nodes": total_nodes,
                 "assigned_at": assignment.assigned_at,
                 "last_active": user.last_login,
             })
 
+    db.commit()  # Persist any synced progress_pct values
     return {"analytics": analytics_data}
 
 
@@ -211,7 +323,13 @@ def get_skill_gaps(
         raise HTTPException(status_code=404, detail="Roadmap not found")
 
     nodes = db.query(RoadmapNode).filter(RoadmapNode.roadmap_id == roadmap_id).all()
-    total_users = db.query(UserRoadmap).filter(UserRoadmap.roadmap_id == roadmap_id).count()
+    # Only count users with the learner role
+    learner_subquery = db.query(User.id).filter(User.role == "learner").subquery()
+    
+    total_users = db.query(UserRoadmap).filter(
+        UserRoadmap.roadmap_id == roadmap_id,
+        UserRoadmap.user_id.in_(learner_subquery)
+    ).count()
 
     if total_users == 0:
         return {"roadmap": roadmap.title, "total_assigned_users": 0, "skill_gaps": []}
@@ -221,11 +339,13 @@ def get_skill_gaps(
         done_count = db.query(NodeProgress).filter(
             NodeProgress.node_id == node.id,
             NodeProgress.status == NodeStatus.DONE,
+            NodeProgress.user_id.in_(learner_subquery)
         ).count()
 
         not_started = db.query(NodeProgress).filter(
             NodeProgress.node_id == node.id,
             NodeProgress.status == NodeStatus.PENDING,
+            NodeProgress.user_id.in_(learner_subquery)
         ).count()
 
         completion_rate = round((done_count / total_users * 100), 2)

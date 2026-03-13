@@ -100,9 +100,11 @@ export default function AdminUsers() {
                                     <td style={{ fontWeight: 700 }}>{u.xp}</td>
                                     <td>Lv. {u.level}</td>
                                     <td>
-                                        <button className="btn btn-primary btn-sm" onClick={() => setAssignModal(u)}>
-                                            <HiOutlineMap /> Assign
-                                        </button>
+                                        {u.role === 'learner' && (
+                                            <button className="btn btn-primary btn-sm" onClick={() => setAssignModal(u)}>
+                                                <HiOutlineMap /> Assign
+                                            </button>
+                                        )}
                                     </td>
                                 </tr>
                             ))}
@@ -118,12 +120,18 @@ export default function AdminUsers() {
                         <h2>Assign Roadmap to {assignModal.full_name}</h2>
                         <div className="input-group" style={{ marginBottom: 20 }}>
                             <label>Select Roadmap</label>
-                            <select className="input" value={selectedRoadmap} onChange={(e) => setSelectedRoadmap(e.target.value)}>
-                                <option value="">-- Choose a roadmap --</option>
-                                {roadmaps.map((rm) => (
-                                    <option key={rm.id} value={rm.id}>{rm.title}</option>
-                                ))}
-                            </select>
+                            {roadmaps.filter(rm => rm.is_published).length === 0 ? (
+                                <p style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 0' }}>
+                                    No published roadmaps available. Publish a roadmap first.
+                                </p>
+                            ) : (
+                                <select className="input" value={selectedRoadmap} onChange={(e) => setSelectedRoadmap(e.target.value)}>
+                                    <option value="">-- Choose a published roadmap --</option>
+                                    {roadmaps.filter(rm => rm.is_published).map((rm) => (
+                                        <option key={rm.id} value={rm.id}>{rm.title}</option>
+                                    ))}
+                                </select>
+                            )}
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>
                             <button className="btn btn-primary" onClick={handleAssign} disabled={!selectedRoadmap || assigning}>

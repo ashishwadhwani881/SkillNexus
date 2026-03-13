@@ -156,6 +156,57 @@ Give a brief (2-3 sentences) encouraging feedback. If they didn't pass, suggest 
     }
 
 
+async def recommend_roadmaps(skills: List[str], available_roadmaps: List[dict]) -> List[str]:
+    """
+    AI-powered roadmap recommender based on extracted resume skills and actual database roadmaps.
+    """
+    if not available_roadmaps:
+        return []
+
+    model = _get_model()
+
+    # Format available roadmaps for the prompt
+    roadmap_descriptions = ""
+    for rm in available_roadmaps:
+        roadmap_descriptions += f"- Title: {rm['title']}\n"
+        if rm.get('description'):
+            roadmap_descriptions += f"  Description: {rm['description']}\n"
+
+    skills_text = ", ".join(skills) if skills else "No specific technical skills listed."
+
+    generation_prompt = f"""You are an expert career counselor for a platform called SkillNexus.
+Recommend the best learning roadmaps for a user based on their extracted resume skills.
+
+User skills:
+{skills_text}
+
+Available roadmaps:
+{roadmap_descriptions}
+
+You MUST respond with ONLY valid JSON in this exact format, no markdown, no extra text:
+{{
+    "recommended_roadmaps": ["Roadmap Title 1", "Roadmap Title 2"]
+}}
+
+Rules:
+- You ONLY choose roadmap titles from the exact "Available roadmaps" list provided above.
+- Match the titles exactly as they are provided. Do not invent new roadmaps.
+- Recommend between 1 to 3 of the most relevant roadmaps.
+"""
+
+    try:
+        response = model.generate_content(generation_prompt)
+        response_text = response.text.strip()
+        if response_text.startswith("```"):
+            lines = response_text.split("\n")
+            response_text = "\n".join(lines[1:-1])
+        data = json.loads(response_text)
+        return data.get("recommended_roadmaps", [])
+    except (json.JSONDecodeError, Exception) as e:
+        print(f"Failed to generate AI roadmap recommendations: {str(e)}")
+        # Fallback to random or basic matching if AI fails, or just return empty
+        return []
+
 async def generate_roadmap_from_prompt(prompt: str) -> dict:
     """
     AI Roadmap Generator: Generate a complete roadmap JSON structure from a text prompt.

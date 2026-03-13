@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 from datetime import datetime, timedelta
 from app.database import get_db
-from app.models.user import User, PointTransaction
+from app.models.user import User, PointTransaction, UserRole
 from app.schemas.user import LeaderboardEntry
 
 router = APIRouter(prefix="/api/leaderboard", tags=["Leaderboard"])
@@ -45,6 +45,7 @@ def get_leaderboard(
                 subquery.c.period_xp,
             )
             .join(subquery, User.id == subquery.c.user_id)
+            .filter(User.role == UserRole.LEARNER)
             .order_by(desc(subquery.c.period_xp))
             .limit(limit)
             .all()
@@ -64,6 +65,7 @@ def get_leaderboard(
     else:
         users = (
             db.query(User)
+            .filter(User.role == UserRole.LEARNER)
             .order_by(desc(User.xp))
             .limit(limit)
             .all()

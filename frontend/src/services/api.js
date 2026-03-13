@@ -14,11 +14,11 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
-// Redirect to login on 401
+// Redirect to login on 401, EXCEPT when actively trying to log in
 api.interceptors.response.use(
     (res) => res,
     (err) => {
-        if (err.response?.status === 401) {
+        if (err.response?.status === 401 && !err.config.url.includes('/auth/login')) {
             localStorage.removeItem('token');
             localStorage.removeItem('user');
             window.location.href = '/login';
@@ -61,9 +61,11 @@ export const roadmapAPI = {
     addNode: (id, data) => api.post(`/roadmaps/${id}/nodes`, data),
     updateNode: (id, nodeId, data) => api.put(`/roadmaps/${id}/nodes/${nodeId}`, data),
     deleteNode: (id, nodeId) => api.delete(`/roadmaps/${id}/nodes/${nodeId}`),
-    importJSON: (id, data) => api.post(`/roadmaps/${id}/import`, data),
+    importJSON: (id, data) => api.post(`/roadmaps/${id}/import`, data), // Legacy: import into existing
+    importNewJSON: (data) => api.post('/roadmaps/import', data), // New: create roadmap from JSON
     exportJSON: (id) => api.get(`/roadmaps/${id}/export`),
     generate: (prompt) => api.post('/roadmaps/generate', { prompt }),
+    publish: (id) => api.post(`/roadmaps/${id}/publish`),
 };
 
 // --- Progress ---
@@ -87,6 +89,7 @@ export const chatAPI = {
 
 // --- Admin ---
 export const adminAPI = {
+    dashboard: () => api.get('/admin/dashboard'),
     assign: (userId, roadmapId) => api.post(`/admin/assign?user_id=${userId}&roadmap_id=${roadmapId}`),
     bulkAssign: (userIds, roadmapId) => api.post(`/admin/assign/bulk?roadmap_id=${roadmapId}`, userIds),
     analytics: (roadmapId) => api.get(`/admin/analytics${roadmapId ? `?roadmap_id=${roadmapId}` : ''}`),

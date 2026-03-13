@@ -44,6 +44,7 @@ class NodeTreeResponse(NodeResponse):
     children: List["NodeTreeResponse"] = []
     status: Optional[str] = None  # Populated per-user when viewing
     quiz_passed: bool = False
+    started_at: Optional[datetime] = None  # When user started learning this node
 
     class Config:
         from_attributes = True
@@ -54,7 +55,6 @@ class RoadmapCreate(BaseModel):
     title: str = Field(..., min_length=1)
     description: Optional[str] = None
     category: Optional[str] = None
-    is_published: bool = False
 
 
 class RoadmapUpdate(BaseModel):
@@ -71,6 +71,7 @@ class RoadmapResponse(BaseModel):
     category: Optional[str] = None
     created_by: Optional[int] = None
     is_published: bool
+    status: str = "draft"  # "draft" or "published"
     created_at: Optional[datetime] = None
     total_nodes: int = 0
 
@@ -101,6 +102,7 @@ class UserRoadmapResponse(BaseModel):
 
 # --- Import/Export ---
 class NodeImport(BaseModel):
+    id: Optional[int] = None
     title: str
     description: Optional[str] = None
     resource_links: List[ResourceLink] = []
@@ -108,6 +110,7 @@ class NodeImport(BaseModel):
 
 
 class RoadmapImport(BaseModel):
+    id: Optional[int] = None
     title: str
     description: Optional[str] = None
     category: Optional[str] = None

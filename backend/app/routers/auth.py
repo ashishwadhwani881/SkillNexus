@@ -59,7 +59,7 @@ def login(user_data: UserLogin, db: Session = Depends(get_db)):
         PointTransaction.action == "login",
         cast(PointTransaction.created_at, Date) == today
     ).first()
-
+    
     if not already_awarded:
         award_points(db, user, "login", "Daily login bonus")
 
